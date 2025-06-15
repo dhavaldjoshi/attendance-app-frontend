@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Tracker</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .loader-overlay {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+      }
+      .loader-content {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background-color: white;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      }
+      .loader-spinner {
+        animation: spin 1s linear infinite;
+        border-radius: 9999px;
+        height: 2rem;
+        width: 2rem;
+        border-bottom-width: 2px;
+        border-color: #4f46e5; /* indigo-600 */
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .toast-notification {
+          position: fixed;
+          top: 1.25rem;
+          right: 1.25rem;
+          padding: 1rem;
+          border-radius: 0.5rem;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+          color: white;
+          opacity: 0;
+          transition: opacity 300ms;
+          z-index: 50;
+      }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Login Page -->
+    <div id="loginPage" class="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+        <div class="w-full max-w-sm p-8 space-y-6 bg-white rounded-xl shadow-lg">
+            <h2 class="text-3xl font-bold text-center text-gray-800">Teacher Login</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="username" class="text-sm font-medium text-gray-700">Username</label>
+                    <input id="username" type="text" class="w-full p-3 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., teacher6a">
+                </div>
+                <div>
+                    <label for="password" class="text-sm font-medium text-gray-700">Password</label>
+                    <input id="password" type="password" class="w-full p-3 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="••••••••">
+                </div>
+            </div>
+            <button id="loginButton" class="w-full py-3 px-4 bg-indigo-600 text-white font-semibold rounded-md shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105 disabled:bg-indigo-300">
+                Login
+            </button>
+        </div>
+    </div>
+
+    <!-- Attendance Page (initially hidden) -->
+    <div id="attendancePage" class="hidden min-h-screen p-2 sm:p-6 lg:p-8">
+        <div class="max-w-2xl mx-auto">
+            <header class="bg-white shadow rounded-lg p-4 mb-6 text-center">
+                <h1 id="welcomeMessage" class="text-2xl font-bold text-gray-800"></h1>
+            </header>
+            <main class="space-y-6">
+                <div class="bg-white p-4 rounded-lg shadow-md flex flex-col sm:flex-row gap-4 items-center">
+                    <div class="flex-1 w-full">
+                        <label for="classDisplay" class="block text-sm font-medium text-gray-700">Class (Locked)</label>
+                        <input type="text" id="classDisplay" readonly class="mt-1 block w-full p-2 text-base border-gray-300 bg-gray-200 focus:outline-none sm:text-sm rounded-md">
+                    </div>
+                    <div class="flex-1 w-full">
+                        <label for="datePicker" class="block text-sm font-medium text-gray-700">Date</label>
+                        <input type="date" id="datePicker" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100">
+                    </div>
+                </div>
+
+                <div id="attendanceForms" class="space-y-6">
+                    <!-- Form sections will be injected here by JavaScript -->
+                </div>
+
+                <div class="flex flex-col sm:flex-row justify-end mt-6 gap-3">
+                    <button id="clearButton" class="w-full sm:w-auto py-3 px-8 bg-gray-500 text-white font-semibold rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 hover:bg-gray-600 disabled:bg-gray-300">
+                       Clear All
+                    </button>
+                    <button id="submitButton" class="w-full sm:w-auto py-3 px-8 text-white font-semibold rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 disabled:bg-gray-300">
+                       Submit New Entry
+                    </button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Generic Loader and Toast Elements -->
+    <div id="loader" class="loader-overlay hidden"><div class="loader-content"><div class="loader-spinner"></div><span id="loaderText" class="text-lg font-medium text-gray-700"></span></div></div>
+    <div id="toast" class="toast-notification"></div>
+
+    <script>
+      // --- GLOBAL STATE ---
+      let teacherInfo = null;
+      let isExistingEntry = false;
+
+      // --- UTILITY FUNCTIONS ---
+      function showLoader(text) {
+        document.getElementById('loaderText').textContent = text + '...';
+        document.getElementById('loader').classList.remove('hidden');
+      }
+      function hideLoader() {
+        document.getElementById('loader').classList.add('hidden');
+      }
+      function showToast(message, type = 'info', duration = 3000) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = 'toast-notification'; // Reset classes
+        const typeClasses = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+        toast.classList.add(typeClasses[type]);
+        toast.style.opacity = '1';
+        setTimeout(() => { toast.style.opacity = '0'; }, duration);
+      }
+
+      // --- ATTENDANCE FORM LOGIC ---
+      function createFormSection(id, title) {
+        const section = document.createElement('div');
+        section.className = 'bg-white p-4 sm:p-6 rounded-lg shadow-md';
+        section.innerHTML = `
+          <h3 class="text-xl font-semibold mb-4 text-gray-700 border-b pb-2">${title}</h3>
+          <div class="grid grid-cols-3 items-center gap-2 sm:gap-4 font-medium text-center mb-2">
+              <span class="text-sm text-gray-500">Category</span>
+              <span class="text-sm text-gray-500">Girls</span>
+              <span class="text-sm text-gray-500">Boys</span>
+          </div>
+          <div id="${id}Inputs" class="space-y-3"></div>
+          <div class="mt-6 pt-4 border-t">
+              <div class="grid grid-cols-3 gap-2 sm:gap-4">
+                  <div class="flex flex-col text-center p-2 bg-gray-100 rounded-md">
+                      <span class="text-sm font-medium text-gray-500">Total Girls</span>
+                      <span id="${id}TotalGirls" class="text-lg font-bold text-gray-800">0</span>
+                  </div>
+                  <div class="flex flex-col text-center p-2 bg-gray-100 rounded-md">
+                      <span class="text-sm font-medium text-gray-500">Total Boys</span>
+                      <span id="${id}TotalBoys" class="text-lg font-bold text-gray-800">0</span>
+                  </div>
+                  <div class="flex flex-col text-center p-2 bg-gray-100 rounded-md">
+                      <span class="text-sm font-medium text-gray-500">Grand Total</span>
+                      <span id="${id}GrandTotal" class="text-lg font-bold text-gray-800">0</span>
+                  </div>
+              </div>
+          </div>
+        `;
+        document.getElementById('attendanceForms').appendChild(section);
+      }
+
+      function addInputRow(sectionId, subCategory) {
+          const container = document.getElementById(`${sectionId}Inputs`);
+          const row = document.createElement('div');
+          row.className = 'grid grid-cols-3 items-center gap-2 sm:gap-4';
+          row.innerHTML = `
+            <span class="font-semibold text-gray-600 text-sm sm:text-base">${subCategory}</span>
+            <input type="number" id="${sectionId}-${subCategory}-girls" min="0" max="99" class="w-full p-2 text-center border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="0">
+            <input type="number" id="${sectionId}-${subCategory}-boys" min="0" max="99" class="w-full p-2 text-center border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="0">
+          `;
+          container.appendChild(row);
+      }
+
+      function calculateTotals() {
+        ['classAttendance', 'mdmAttendance'].forEach(section => {
+          let totalGirls = 0;
+          let totalBoys = 0;
+          ['SC', 'ST', 'SEBC', 'OTHER'].forEach(cat => {
+            totalGirls += Number(document.getElementById(`${section}-${cat}-girls`).value) || 0;
+            totalBoys += Number(document.getElementById(`${section}-${cat}-boys`).value) || 0;
+          });
+          document.getElementById(`${section}TotalGirls`).textContent = totalGirls;
+          document.getElementById(`${section}TotalBoys`).textContent = totalBoys;
+          document.getElementById(`${section}GrandTotal`).textContent = totalGirls + totalBoys;
+        });
+      }
+      
+      // --- EVENT HANDLERS & API CALLS ---
+      function onLoginSuccess(result) {
+        if (result.success) {
+          teacherInfo = result.teacher;
+          document.getElementById('loginPage').classList.add('hidden');
+          document.getElementById('attendancePage').classList.remove('hidden');
+          document.getElementById('welcomeMessage').textContent = `Welcome, ${teacherInfo.name}!`;
+          document.getElementById('classDisplay').value = teacherInfo.assignedClass;
+          fetchDataForDate();
+        } else {
+          showToast(result.message, 'error');
+        }
+        hideLoader();
+      }
+
+      function onApiFailure(error) {
+        showToast(`Error: ${error.message || 'Script error'}`, 'error');
+        hideLoader();
+      }
+
+      function fetchDataForDate() {
+        showLoader('Fetching data');
+        const date = document.getElementById('datePicker').value;
+        google.script.run
+          .withSuccessHandler(onFetchSuccess)
+          .withFailureHandler(onApiFailure)
+          .getAttendanceData(teacherInfo.assignedClass, date);
+      }
+
+      function onFetchSuccess(result) {
+        clearForm();
+        if (result.found && result.data) {
+          isExistingEntry = true;
+          populateForm(result.data);
+          showToast('Existing data loaded.', 'success');
+        } else {
+          isExistingEntry = false;
+          showToast('Ready for new entry.', 'info');
+        }
+        updateSubmitButton();
+        calculateTotals();
+        hideLoader();
+      }
+
+      function handleSubmit() {
+        showLoader('Saving data');
+        const data = getFormData();
+        google.script.run
+          .withSuccessHandler(onSaveSuccess)
+          .withFailureHandler(onApiFailure)
+          .saveAttendanceData(data);
+      }
+      
+      function onSaveSuccess() {
+          isExistingEntry = true;
+          updateSubmitButton();
+          hideLoader();
+          showToast('Data saved successfully!', 'success');
+      }
+
+      // --- FORM MANIPULATION ---
+      function populateForm(data) {
+        ['classAttendance', 'mdmAttendance'].forEach(section => {
+          ['SC', 'ST', 'SEBC', 'OTHER'].forEach(cat => {
+            document.getElementById(`${section}-${cat}-girls`).value = data[section]?.girls?.[cat] ?? '';
+            document.getElementById(`${section}-${cat}-boys`).value = data[section]?.boys?.[cat] ?? '';
+          });
+        });
+      }
+
+      function clearForm() {
+        document.querySelectorAll('#attendanceForms input[type="number"]').forEach(input => input.value = '');
+        calculateTotals();
+      }
+      
+      function getFormData() {
+         const attendanceData = {
+            classAttendance: { girls: {}, boys: {} },
+            mdmAttendance: { girls: {}, boys: {} },
+        };
+        ['classAttendance', 'mdmAttendance'].forEach(section => {
+            ['SC', 'ST', 'SEBC', 'OTHER'].forEach(cat => {
+                attendanceData[section].girls[cat] = document.getElementById(`${section}-${cat}-girls`).value;
+                attendanceData[section].boys[cat] = document.getElementById(`${section}-${cat}-boys`).value;
+            });
+        });
+        return {
+            className: teacherInfo.assignedClass,
+            date: document.getElementById('datePicker').value,
+            attendanceData: attendanceData
+        };
+      }
+
+      function updateSubmitButton() {
+        const button = document.getElementById('submitButton');
+        if (isExistingEntry) {
+          button.textContent = 'Update Entry';
+          button.classList.remove('bg-green-600', 'hover:bg-green-700');
+          button.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        } else {
+          button.textContent = 'Submit New Entry';
+          button.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+          button.classList.add('bg-green-600', 'hover:bg-green-700');
+        }
+      }
+
+      // --- INITIALIZATION ---
+      document.addEventListener('DOMContentLoaded', () => {
+        // Build the forms
+        createFormSection('classAttendance', 'Class Attendance');
+        createFormSection('mdmAttendance', 'MDM Attendance');
+        ['SC', 'ST', 'SEBC', 'OTHER'].forEach(cat => {
+            addInputRow('classAttendance', cat);
+            addInputRow('mdmAttendance', cat);
+        });
+        
+        // Set default date
+        document.getElementById('datePicker').value = new Date().toISOString().split('T')[0];
+
+        // Add event listeners
+        document.getElementById('loginButton').addEventListener('click', () => {
+          showLoader('Logging in');
+          google.script.run
+            .withSuccessHandler(onLoginSuccess)
+            .withFailureHandler(onApiFailure)
+            .authenticateUser(
+              document.getElementById('username').value,
+              document.getElementById('password').value
+            );
+        });
+
+        document.getElementById('datePicker').addEventListener('change', fetchDataForDate);
+        document.getElementById('submitButton').addEventListener('click', handleSubmit);
+        document.getElementById('clearButton').addEventListener('click', clearForm);
+        document.getElementById('attendanceForms').addEventListener('input', calculateTotals);
+      });
+    </script>
+</body>
+</html>
