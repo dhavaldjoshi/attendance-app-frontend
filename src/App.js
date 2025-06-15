@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 // --- CONFIGURATION ---
 // This URL will be pasted from the Google Apps Script deployment (see setup guide).
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzBKzTzWmFNpArAJbEO3Bv7K6OaaeJF3nGRriaGxOYJDrSmFFQW7bXjtvsyJA-VMv1o/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyxtrFpjdaaDOvsmK9DePr6pogYWjmmZCufM4hlKPIt_xzTtj1uwezWFRoL6CYV7y0M/exec";
 // -------------------
 
 // --- Reusable Helper Components ---
